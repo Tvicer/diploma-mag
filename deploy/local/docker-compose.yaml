@@ -1,0 +1,237 @@
+version: '3.9'
+
+services:
+  #  diploma-postgres:
+  #    image: postgres:latest
+  #    container_name: diploma-postgres
+  #    environment:
+  #      POSTGRES_USER: postgres
+  #      POSTGRES_PASSWORD: postgres
+  #      POSTGRES_DB: postgres
+  #    ports:
+  #      - "5432:5432"
+
+  diploma-zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.4
+    container_name: diploma-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 2181:2181
+    networks:
+      - diploma-network
+
+  diploma-kafka:
+    image: confluentinc/cp-kafka:7.4.4
+    container_name: diploma-kafka
+    depends_on:
+      - diploma-zookeeper
+    ports:
+      - 9092:9092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: diploma-zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://diploma-kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    networks:
+      - diploma-network
+
+  diploma-kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: diploma-kafka-ui
+    depends_on:
+      - diploma-kafka
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: diploma-kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: diploma-zookeeper:2181
+    networks:
+      - diploma-network
+
+  diploma-debezium:
+    image: debezium/connect:1.4
+    container_name: diploma-debezium
+    environment:
+      BOOTSTRAP_SERVERS: diploma-kafka:29092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    depends_on:
+      - diploma-kafka
+    ports:
+      - 8083:8083
+    networks:
+      - diploma-network
+
+  #  diploma-debezium-ui:
+  #    image: debezium/debezium-ui:latest
+  #    restart: always
+  #    container_name: diploma-debezium-ui
+  #    hostname: diploma-debezium-ui
+  #    depends_on:
+  #      - diploma-debezium
+  #    ports:
+  #      - '8084:8080'
+  #    environment:
+  #      KAFKA_CONNECT_URIS: http://diploma-debezium:8083
+
+  diploma-redis:
+    image: redis:latest
+    container_name: diploma-redis
+    environment:
+      - REDIS_PASSWORD=password
+      - REDIS_USER=redis
+      - REDIS_USER_PASSWORD=password
+    ports:
+      - "6379:6379"
+    networks:
+      - diploma-network
+
+  etcd1:
+    image: quay.io/coreos/etcd:v3.5.13
+    container_name: etcd1
+    environment:
+      ETCD_NAME: etcd1
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd1:2379
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd1:2380
+      ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: patroni-cluster
+      ETCD_ENABLE_V2: "true"
+    ports:
+      - "2379:2379"
+    networks:
+      - diploma-network
+
+  etcd2:
+    image: quay.io/coreos/etcd:v3.5.13
+    container_name: etcd2
+    environment:
+      ETCD_NAME: etcd2
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd2:2379
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd2:2380
+      ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: patroni-cluster
+      ETCD_ENABLE_V2: "true"
+    ports:
+      - "2381:2379"
+    networks:
+      - diploma-network
+
+  patroni1:
+    build:
+      context: ./patroni-master
+      dockerfile: Dockerfile
+    container_name: patroni1
+    depends_on:
+      - etcd1
+      - etcd2
+    environment:
+      PATRONI_NAME: patroni1
+      PATRONI_SCOPE: postgres-cluster
+      PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
+      PATRONI_RESTAPI_CONNECT_ADDRESS: patroni1:8008
+      PATRONI_ETCD_HOSTS: http://etcd1:2379,http://etcd2:2379
+
+      PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: patroni1:5432
+
+      PATRONI_SUPERUSER_USERNAME: postgres
+      PATRONI_SUPERUSER_PASSWORD: postgres
+
+      PATRONI_REPLICATION_USERNAME: replicator
+      PATRONI_REPLICATION_PASSWORD: replicator
+
+      CONSUL_HTTP_ADDR: diploma-consul:8500
+    ports:
+      - "5433:5432"
+      - "8008:8008"
+    networks:
+      - diploma-network
+
+  patroni2:
+    build:
+      context: ./patroni-master
+      dockerfile: Dockerfile
+    container_name: patroni2
+    depends_on:
+      - etcd1
+      - etcd2
+    environment:
+      PATRONI_NAME: patroni2
+      PATRONI_SCOPE: postgres-cluster
+      PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
+      PATRONI_RESTAPI_CONNECT_ADDRESS: patroni2:8008
+      PATRONI_ETCD_HOSTS: http://etcd1:2379
+
+      PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: patroni2:5432
+
+      PATRONI_SUPERUSER_USERNAME: postgres
+      PATRONI_SUPERUSER_PASSWORD: postgres
+
+      PATRONI_REPLICATION_USERNAME: replicator
+      PATRONI_REPLICATION_PASSWORD: replicator
+
+      CONSUL_HTTP_ADDR: diploma-consul:8500
+    ports:
+      - "5434:5432"
+      - "8009:8008"
+    networks:
+      - diploma-network
+
+  diploma-consul:
+    image: hashicorp/consul:1.17
+    container_name: diploma-consul
+    ports:
+      - "8500:8500"
+    command: >
+      agent -server -bootstrap-expect=1
+      -ui -client=0.0.0.0
+      -bind=0.0.0.0
+      -data-dir=/consul/data
+    networks:
+      - diploma-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/java-overview.json
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+
+networks:
+  diploma-network:
+    driver: bridge

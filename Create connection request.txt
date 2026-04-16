@@ -1,0 +1,9 @@
+curl -X POST http://172.20.0.11:8083/connectors -H "Accept:application/json" -H "Content-Type:application/json" -d '{"name": "test-connector", "config": {"connector.class": "io.debezium.connector.postgresql.PostgresConnector", "database.hostname": "172.20.0.8", "database.port": "5432", "database.user": "postgres", "database.password": "postgres", "database.dbname": "postgres", "database.server.name": "databaseServerNameTest", "table.include.list": "public.example", "topic.prefix": "testPrefix", "topic.creation.enable": "true", "topic.creation.default.replication.factor": 1, "topic.creation.default.partitions": 1, "plugin.name": "pgoutput"}}'
+
+curl -H "Accept:application/json" 172.20.0.11:8083/connectors/test-connector/status
+
+curl -H "Accept:application/json" 172.20.0.11:8083/connectors/
+
+curl -X DELETE http://172.20.0.11:8083/connectors/test-connector
+
+172.18.0.5:8083

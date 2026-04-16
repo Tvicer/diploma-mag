@@ -1,0 +1,17 @@
+{
+  "name": "test-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "172.18.0.2",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "postgres",
+    "database.dbname": "postgres",
+    "database.server.name": "databaseServerNameTest",
+    "table.include.list": "public.example",
+    "topic.prefix": "testPrefix",
+    "topic.creation.enable": "true",
+    "topic.creation.default.replication.factor": 1,
+    "topic.creation.default.partitions": 1
+  }
+}
