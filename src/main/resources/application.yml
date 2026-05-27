@@ -3,13 +3,21 @@ spring:
     name: "Diploma"
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/postgres
+    url: jdbc:postgresql://localhost:5435/postgres
     driverClassName: org.postgresql.Driver
     username: postgres
     password: postgres
 
+  liquibase:
+    enabled: true
+    change-log: "classpath:db/changelog/db.changelog-master.yaml"
+    drop-first: false
+
   kafka:
     bootstrap-servers: localhost:9092
+
+server:
+  port: 8081
 
   redis:
     host: localhost

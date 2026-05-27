@@ -1,15 +1,15 @@
 version: '3.9'
 
 services:
-  #  diploma-postgres:
-  #    image: postgres:latest
-  #    container_name: diploma-postgres
-  #    environment:
-  #      POSTGRES_USER: postgres
-  #      POSTGRES_PASSWORD: postgres
-  #      POSTGRES_DB: postgres
-  #    ports:
-  #      - "5432:5432"
+  diploma-cache-metadata-postgres:
+    image: postgres:latest
+    container_name: diploma-cache-metadata-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5435:5432"
 
   diploma-zookeeper:
     image: confluentinc/cp-zookeeper:7.4.4
@@ -98,39 +98,80 @@ services:
     networks:
       - diploma-network
 
-  etcd1:
-    image: quay.io/coreos/etcd:v3.5.13
-    container_name: etcd1
+  #  etcd1:
+  #    image: quay.io/coreos/etcd:v3.5.13
+  #    container_name: etcd1
+  #    environment:
+  #      ETCD_NAME: etcd1
+  #      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+  #      ETCD_ADVERTISE_CLIENT_URLS: http://etcd1:2379
+  #      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+  #      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd1:2380
+  #      ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380
+  #      ETCD_INITIAL_CLUSTER_STATE: new
+  #      ETCD_INITIAL_CLUSTER_TOKEN: patroni-cluster
+  #      ETCD_ENABLE_V2: "true"
+  #    ports:
+  #      - "2379:2379"
+  #    networks:
+  #      - diploma-network
+  #
+  #  etcd2:
+  #    image: quay.io/coreos/etcd:v3.5.13
+  #    container_name: etcd2
+  #    environment:
+  #      ETCD_NAME: etcd2
+  #      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+  #      ETCD_ADVERTISE_CLIENT_URLS: http://etcd2:2379
+  #      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+  #      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd2:2380
+  #      ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380
+  #      ETCD_INITIAL_CLUSTER_STATE: new
+  #      ETCD_INITIAL_CLUSTER_TOKEN: patroni-cluster
+  #      ETCD_ENABLE_V2: "true"
+  #    ports:
+  #      - "2381:2379"
+  #    networks:
+  #      - diploma-network
+
+  diploma-zookeeper-patroni-1:
+    image: confluentinc/cp-zookeeper:7.4.4
+    container_name: diploma-zookeeper-patroni-1
+    hostname: diploma-zookeeper-patroni-1
     environment:
-      ETCD_NAME: etcd1
-      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
-      ETCD_ADVERTISE_CLIENT_URLS: http://etcd1:2379
-      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
-      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd1:2380
-      ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380
-      ETCD_INITIAL_CLUSTER_STATE: new
-      ETCD_INITIAL_CLUSTER_TOKEN: patroni-cluster
-      ETCD_ENABLE_V2: "true"
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2182
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: diploma-zookeeper-patroni-1:2888:3888;diploma-zookeeper-patroni-2:2888:3888
     ports:
-      - "2379:2379"
+      - "2182:2181"
+    volumes:
+      - ./zookeeeper-script/zk-patroni-watcher.py:/zk-patroni-watcher.py
+      - ./zookeeeper-script/entrypoint-zookeeper.sh:/entrypoint-zookeeper.sh
+    command: >
+      sh -c "
+      cp /entrypoint-zookeeper.sh /tmp/entrypoint-zookeeper.sh &&
+      chmod +x /tmp/entrypoint-zookeeper.sh &&
+      /tmp/entrypoint-zookeeper.sh
+      "
     networks:
       - diploma-network
 
-  etcd2:
-    image: quay.io/coreos/etcd:v3.5.13
-    container_name: etcd2
+  diploma-zookeeper-patroni-2:
+    image: confluentinc/cp-zookeeper:7.4.4
+    container_name: diploma-zookeeper-patroni-2
+    hostname: diploma-zookeeper-patroni-2
     environment:
-      ETCD_NAME: etcd2
-      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
-      ETCD_ADVERTISE_CLIENT_URLS: http://etcd2:2379
-      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
-      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd2:2380
-      ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380
-      ETCD_INITIAL_CLUSTER_STATE: new
-      ETCD_INITIAL_CLUSTER_TOKEN: patroni-cluster
-      ETCD_ENABLE_V2: "true"
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_CLIENT_PORT: 2183
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: diploma-zookeeper-patroni-1:2888:3888;diploma-zookeeper-patroni-2:2888:3888
     ports:
-      - "2381:2379"
+      - "2183:2181"
     networks:
       - diploma-network
 
@@ -140,25 +181,22 @@ services:
       dockerfile: Dockerfile
     container_name: patroni1
     depends_on:
-      - etcd1
-      - etcd2
+      - diploma-zookeeper-patroni-1
+      - diploma-zookeeper-patroni-2
     environment:
       PATRONI_NAME: patroni1
       PATRONI_SCOPE: postgres-cluster
+      PATRONI_NAMESPACE: /service/
       PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
       PATRONI_RESTAPI_CONNECT_ADDRESS: patroni1:8008
-      PATRONI_ETCD_HOSTS: http://etcd1:2379,http://etcd2:2379
-
+      PATRONI_ZOOKEEPER_HOSTS: "['diploma-zookeeper-patroni-1:2182', 'diploma-zookeeper-patroni-2:2183']"
       PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
       PATRONI_POSTGRESQL_CONNECT_ADDRESS: patroni1:5432
-
       PATRONI_SUPERUSER_USERNAME: postgres
       PATRONI_SUPERUSER_PASSWORD: postgres
-
       PATRONI_REPLICATION_USERNAME: replicator
       PATRONI_REPLICATION_PASSWORD: replicator
-
-      CONSUL_HTTP_ADDR: diploma-consul:8500
+      PATRONI_WAL_LEVEL: logical
     ports:
       - "5433:5432"
       - "8008:8008"
@@ -171,66 +209,38 @@ services:
       dockerfile: Dockerfile
     container_name: patroni2
     depends_on:
-      - etcd1
-      - etcd2
+      - diploma-zookeeper-patroni-1
+      - diploma-zookeeper-patroni-2
     environment:
       PATRONI_NAME: patroni2
       PATRONI_SCOPE: postgres-cluster
+      PATRONI_NAMESPACE: /service/
       PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
       PATRONI_RESTAPI_CONNECT_ADDRESS: patroni2:8008
-      PATRONI_ETCD_HOSTS: http://etcd1:2379
-
+      PATRONI_ZOOKEEPER_HOSTS: "['diploma-zookeeper-patroni-1:2182', 'diploma-zookeeper-patroni-2:2183']"
       PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
       PATRONI_POSTGRESQL_CONNECT_ADDRESS: patroni2:5432
-
       PATRONI_SUPERUSER_USERNAME: postgres
       PATRONI_SUPERUSER_PASSWORD: postgres
-
       PATRONI_REPLICATION_USERNAME: replicator
       PATRONI_REPLICATION_PASSWORD: replicator
-
-      CONSUL_HTTP_ADDR: diploma-consul:8500
+      PATRONI_WAL_LEVEL: logical
     ports:
       - "5434:5432"
       - "8009:8008"
     networks:
       - diploma-network
 
-  diploma-consul:
-    image: hashicorp/consul:1.17
-    container_name: diploma-consul
-    ports:
-      - "8500:8500"
-    command: >
-      agent -server -bootstrap-expect=1
-      -ui -client=0.0.0.0
-      -bind=0.0.0.0
-      -data-dir=/consul/data
-    networks:
-      - diploma-network
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
+  diploma-experiment-postgres:
+    image: postgres:latest
+    container_name: diploma-experiment-estuary-flow-postgres
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/java-overview.json
-    volumes:
-      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5436:5432"
+
 
 networks:
   diploma-network:
