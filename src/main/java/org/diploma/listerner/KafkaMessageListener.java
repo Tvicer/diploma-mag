@@ -26,6 +26,7 @@ public class KafkaMessageListener {
         this.cacheManager = cacheManager;
         this.redisOffsetRepository = redisOffsetRepository;
         this.localCounter = new AtomicLong(0);
+        redisOffsetRepository.updateRedisOffset();
         this.globalCounter = new AtomicLong(redisOffsetRepository.getRedisOffset());
         this.cache = cacheManager.getCache("testCache");
     }
