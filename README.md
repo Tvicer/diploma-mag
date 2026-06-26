@@ -4,3 +4,5 @@
 ### Архитектура:
 
 ![Архитектура](arch.png)
+
+### Сервис Debezium-controller: https://github.com/Tvicer/Diploma-debezium-controller
